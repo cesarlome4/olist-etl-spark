@@ -1,0 +1,32 @@
+FROM jupyter/pyspark-notebook:spark-3.3.0
+
+# TARGETARCH est injecté automatiquement par BuildKit (amd64 ou arm64)
+ARG TARGETARCH
+
+USER root
+
+RUN apt-get update -qq && \
+    apt-get install -y openjdk-8-jdk curl && \
+    ARCH=$(dpkg --print-architecture) && \
+    update-alternatives --set java /usr/lib/jvm/java-8-openjdk-${ARCH}/jre/bin/java
+
+# Déterminer JAVA_HOME selon l'architecture cible
+ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-${TARGETARCH}
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+# Forcer JAVA_HOME pour le kernel IPython/Jupyter
+RUN echo "export JAVA_HOME=${JAVA_HOME}" >> /etc/profile.d/java.sh && \
+    echo "c.Spawner.env_keep = ['JAVA_HOME']" >> /etc/jupyter/jupyter_notebook_config.py
+
+# PostgreSQL JDBC driver pour Spark (spark.read.jdbc)
+RUN curl -fsSL -o /usr/local/spark/jars/postgresql-42.7.3.jar \
+    https://jdbc.postgresql.org/download/postgresql-42.7.3.jar
+
+# Packages Python pour connecter Spark/Pandas à PostgreSQL
+RUN pip install --quiet psycopg2-binary sqlalchemy pandas matplotlib seaborn
+
+USER jovyan
+
+# Forcer via le profil shell du user jovyan
+RUN echo "export JAVA_HOME=${JAVA_HOME}" >> ~/.bashrc && \
+    echo "export JAVA_HOME=${JAVA_HOME}" >> ~/.profile
